@@ -51,7 +51,7 @@ On an integrated window, slice mass weight is |hᵢ| (baseline-corrected signal)
 - Mz = Σ(h·M²) / Σ(h·M)
 - Đ = Mw / Mn
 
-Signal is treated as **proportional to mass concentration** (typical RI; UV only if dn-style response is acceptable for that analyte).
+Signal height is treated as **proportional to mass concentration**.
 
 ## MWD
 
@@ -100,7 +100,6 @@ Compare Mn, Mw, Đ and one MWD overlay against ChemStation (or another trusted p
 - Offline CDN: if Plotly/JSZip must work with no internet, download those two scripts and point the `<script src>` tags at local copies.
 - One HTML file on purpose. Forks (HPLC-only, etc.) are separate files, not plugins.
 - No auto-peak picking. Integration is manual so you see the baseline.
-- UV-only GPC without a concentration correction is a scientific choice, not something the software can invent.
 
 ## License / use
 
