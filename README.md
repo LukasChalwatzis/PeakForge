@@ -106,3 +106,7 @@ Compare Mn, Mw, Đ and one MWD overlay against ChemStation (or another trusted p
 Written as an institute analysis helper. No warranty. Do not treat it as validated software for regulated release testing unless you validate it yourself.
 
 Instrument control, sequences, and compliance remain Agilent’s (or whoever sold you the LC).
+
+## Disclaimer
+
+This program was vibecoded by SuperGrok
