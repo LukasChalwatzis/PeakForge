@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>PeakForge Visualizer</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root { --bg:#f7f8fa; --panel:#fff; --border:#e1e4e8; --accent:#0969da; --text:#24292f; --muted:#57606a; }
+* { box-sizing: border-box; }
+body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column; }
+header { padding:10px 16px; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+header h1 { margin:0; font-size:16px; font-weight:600; }
+.wrap { display:flex; flex:1; min-height:0; }
+aside { width:380px; background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; }
+.tools { padding:10px 12px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:8px; }
+input[type=search], select, input[type=number], input[type=text] { width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-size:13px; }
+.btns { display:flex; flex-wrap:wrap; gap:6px; }
+button { background:#f6f8fa; border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:12px; cursor:pointer; color:var(--text); }
+button:hover { background:#f3f4f6; }
+button.primary { background:var(--accent); color:#fff; border-color:#0969da; }
+button.primary:hover { background:#0860c4; }
+#list { overflow:auto; flex:1; padding:6px 8px 20px; }
+.sample-row { display:flex; align-items:center; gap:6px; padding:3px 4px; font-size:12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border-radius:4px; cursor:grab; }
+.sample-row:hover { background:#f6f8fa; }
+.sample-row.dragging { opacity: 0.5; }
+.sample-row.drag-over { border-top: 2px solid #0969da; }
+.sample-row.hidden { display:none; }
+.sample-row input[type=checkbox] { margin:0; }
+.sample-row .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sample-row input[type=color] { width:28px; height:22px; padding:0; border:1px solid var(--border); border-radius:3px; cursor:pointer; }
+.sample-row select.ls { width:70px; font-size:11px; padding:2px; }
+main { flex:1; display:flex; flex-direction:column; min-width:0; }
+#plot { flex:1; }
+.status { padding:6px 14px; font-size:12px; color:var(--muted); border-top:1px solid var(--border); background:var(--panel); }
+.legend-controls { display:flex; gap:6px; align-items:center; font-size:12px; flex-wrap:wrap; }
+.legend-controls label { white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>PeakForge Visualizer</h1>
+  <span style="color:var(--muted); font-size:12px;">Upload CSV data to visualize molecular weight distributions. Map columns, style, and export.</span>
+</header>
+<div class="wrap">
+  <aside>
+    <div class="tools">
+      <input id="q" type="search" placeholder="Filter samples…"/>
+      <select id="preset">
+        <option value="">Quick presets…</option>
+        <option value="none">Clear selection</option>
+        <option value="official">Apply official colors</option>
+      </select>
+      <div class="btns">
+        <button class="primary" id="plotBtn">Update plot</button>
+        <button id="normBtn">Toggle area-norm</button>
+        <button id="pngBtn">Download PNG</button>
+        <label style="font-size:12px; cursor:pointer; padding:6px 10px; border:1px solid var(--border); border-radius:6px; background:#f6f8fa;">
+          Upload CSV
+          <input id="csvUpload" type="file" accept=".csv" style="display:none"/>
+        </label>
+      </div>
+      <div class="legend-controls">
+        <label>Legend X:</label>
+        <input id="legX" type="number" min="0" max="1" step="0.05" value="0.02" style="width:60px"/>
+        <label>Y:</label>
+        <input id="legY" type="number" min="0" max="1" step="0.05" value="0.98" style="width:60px"/>
+        <select id="legAnchor">
+          <option value="top left">top left</option>
+          <option value="top right">top right</option>
+          <option value="bottom left">bottom left</option>
+          <option value="bottom right">bottom right</option>
+        </select>
+      </div>
+      <div class="legend-controls">
+        <label>Axis title:</label>
+        <input id="titleSize" type="number" min="8" max="36" value="14" style="width:50px"/>
+        <label>Ticks:</label>
+        <input id="tickSize" type="number" min="8" max="28" value="12" style="width:50px"/>
+        <label>Legend:</label>
+        <input id="legSize" type="number" min="8" max="24" value="10" style="width:50px"/>
+      </div>
+      <div class="legend-controls">
+        <label>Left margin:</label>
+        <input id="marginL" type="number" min="40" max="200" value="90" style="width:55px"/>
+        <label>Bottom:</label>
+        <input id="marginB" type="number" min="40" max="150" value="80" style="width:55px"/>
+      </div>
+      <div class="legend-controls" style="margin-top:8px; border-top:1px solid var(--border); padding-top:8px;">
+        <strong>Export sizing (A4 / Word):</strong>
+      </div>
+      <div class="legend-controls" style="flex-wrap:wrap; gap:8px;">
+        <label>Fig width (cm):</label>
+        <input id="figWidthCm" type="number" min="6" max="20" step="0.5" value="15" style="width:60px"/>
+        <label>DPI:</label>
+        <input id="figDPI" type="number" min="150" max="600" step="50" value="300" style="width:60px"/>
+        <label>Aspect:</label>
+        <select id="figAspect" style="width:80px">
+          <option value="1.5">3:2</option>
+          <option value="1.33" selected>4:3</option>
+          <option value="1.77">16:9</option>
+          <option value="1">1:1</option>
+        </select>
+        <button id="previewExportBtn" style="margin-left:auto;">Preview at export size</button>
+      </div>
+      <div class="btns">
+        <label style="font-size:12px; display:flex; align-items:center; gap:4px;">
+          <input id="showGrid" type="checkbox" checked/> Gridlines
+        </label>
+        <label style="font-size:12px; display:flex; align-items:center; gap:4px;">
+          <input id="showMinor" type="checkbox" checked/> X intermediate labels
+        </label>
+        <label style="font-size:12px; display:flex; align-items:center; gap:4px;">
+          <input id="showLegend" type="checkbox" checked/> Legend
+        </label>
+      </div>
+      <div style="font-size:11px; color:var(--muted);">Official colors: KA21 #DE478E, KA25 #ed7d31, KA27 #70ad47, KA48 #795FAF, KA49 #6892A0</div>
+    </div>
+    <div id="list"></div>
+  </aside>
+  <main>
+    <div id="plot"></div>
+    <div class="status" id="status">0 traces selected</div>
+  </main>
+</div>
+
+<div id="csvModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:8px; padding:16px; width:420px; max-width:90vw; box-shadow:0 4px 24px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 12px; font-size:15px;">Map CSV columns</h3>
+    <div style="font-size:12px; color:#57606a; margin-bottom:10px;" id="csvFileName"></div>
+    <label style="font-size:12px; display:block; margin-bottom:4px;">Sample / trace name column</label>
+    <select id="mapSample" style="width:100%; margin-bottom:8px;"></select>
+    <label style="font-size:12px; display:block; margin-bottom:4px;">MW (g/mol) column</label>
+    <select id="mapMW" style="width:100%; margin-bottom:8px;"></select>
+    <label style="font-size:12px; display:block; margin-bottom:4px;">dw/dlogM column</label>
+    <select id="mapDW" style="width:100%; margin-bottom:12px;"></select>
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button id="csvCancel">Cancel</button>
+      <button id="csvImport" class="primary">Import</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {};
+const OFFICIAL = {"PL_KA21": "#DE478E", "PL_KA25": "#ed7d31", "PL_KA27": "#70ad47", "PL_KA48": "#795FAF", "PL_KA49": "#6892A0", "L-lysine": "#4a4a4a"};
+const names = Object.keys(DATA).sort();
+const list = document.getElementById('list');
+const state = {}; // name -> {checked, color, ls}
+
+function defaultColor(n) {
+  for (const [k, c] of Object.entries(OFFICIAL)) {
+    if (n.includes(k.replace('PL_','')) || n.includes(k)) return c;
+  }
+  // fallback cycle
+  const fallback = ["#5b9bd5","#2f5597","#f4b183","#ff0000","#ffc000","#006600","#cc66ff","#7030a0"];
+  return fallback[names.indexOf(n) % fallback.length];
+}
+function defaultLS(n) {
+  if (n.includes('L-lysine') || n.includes('Blank')) return 'solid';
+  return 'dash';
+}
+
+names.forEach(n => {
+  state[n] = { checked: false, color: defaultColor(n), ls: defaultLS(n), displayName: n };
+  const row = document.createElement('div');
+  row.className = 'sample-row';
+  row.draggable = true;
+  row.dataset.name = n;
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.addEventListener('change', () => { state[n].checked = cb.checked; updateStatus(); });
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'name';
+  nameInput.value = n;
+  nameInput.style.cssText = 'flex:1; font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; border:1px solid transparent; padding:2px 4px; background:transparent;';
+  nameInput.addEventListener('input', () => { state[n].displayName = nameInput.value; });
+  nameInput.addEventListener('change', draw);
+  const color = document.createElement('input');
+  color.type = 'color';
+  color.value = state[n].color;
+  color.addEventListener('input', () => { state[n].color = color.value; });
+  const ls = document.createElement('select');
+  ls.className = 'ls';
+  ['solid','dash','dot','dashdot'].forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    if (s === state[n].ls) opt.selected = true;
+    ls.appendChild(opt);
+  });
+  ls.addEventListener('change', () => { state[n].ls = ls.value; });
+  row.appendChild(cb);
+  row.appendChild(nameInput);
+  row.appendChild(color);
+  row.appendChild(ls);
+  list.appendChild(row);
+  state[n].cb = cb;
+  state[n].nameEl = nameInput;
+  state[n].colorEl = color;
+  state[n].lsEl = ls;
+});
+
+function selected() { return names.filter(n => state[n].checked); }
+function updateStatus() {
+  document.getElementById('status').textContent =
+    selected().length + ' traces selected' + (areaNorm ? ' · area-normalized' : '');
+}
+
+document.getElementById('q').addEventListener('input', e => {
+  const q = e.target.value.toLowerCase();
+  names.forEach(n => {
+    document.querySelector(`[data-name="${CSS.escape(n)}"]`).classList.toggle('hidden', q && !n.toLowerCase().includes(q));
+  });
+});
+
+document.getElementById('preset').addEventListener('change', e => {
+  const v = e.target.value;
+  if (!v) return;
+  if (v === 'none') {
+    names.forEach(n => { state[n].checked = false; state[n].cb.checked = false; });
+  } else if (v === 'official') {
+    names.forEach(n => {
+      const c = defaultColor(n);
+      state[n].color = c;
+      state[n].colorEl.value = c;
+    });
+  } else {
+    names.forEach(n => { state[n].checked = false; state[n].cb.checked = false; });
+    const match = {};
+    if (match[v]) names.forEach(n => { if (match[v](n)) { state[n].checked = true; state[n].cb.checked = true; } });
+  }
+  e.target.value = '';
+  updateStatus();
+  draw();
+});
+
+let areaNorm = false;
+document.getElementById('normBtn').addEventListener('click', () => { areaNorm = !areaNorm; draw(); });
+document.getElementById('plotBtn').addEventListener('click', draw);
+function getExportSize() {
+  const cm = parseFloat(document.getElementById('figWidthCm').value) || 15;
+  const dpi = parseInt(document.getElementById('figDPI').value) || 300;
+  const aspect = parseFloat(document.getElementById('figAspect').value) || 1.33;
+  const widthPx = Math.round((cm / 2.54) * dpi);
+  const heightPx = Math.round(widthPx / aspect);
+  return { width: widthPx, height: heightPx, dpi, cm, aspect };
+}
+
+let previewExportMode = false;
+document.getElementById('previewExportBtn').addEventListener('click', () => {
+  previewExportMode = !previewExportMode;
+  document.getElementById('previewExportBtn').textContent = previewExportMode ? 'Reset preview' : 'Preview at export size';
+  applyPreviewSize();
+  draw();
+});
+
+function applyPreviewSize() {
+  const plotEl = document.getElementById('plot');
+  if (!previewExportMode) {
+    plotEl.style.width = '';
+    plotEl.style.height = '';
+    plotEl.style.maxWidth = '';
+    plotEl.style.margin = '';
+    return;
+  }
+  const sz = getExportSize();
+  const available = plotEl.parentElement.clientWidth - 20;
+  const scale = Math.min(1, available / sz.width);
+  const w = Math.round(sz.width * scale);
+  const h = Math.round(sz.height * scale);
+  plotEl.style.width = w + 'px';
+  plotEl.style.height = h + 'px';
+  plotEl.style.maxWidth = '100%';
+  plotEl.style.margin = '0 auto';
+}
+
+document.getElementById('pngBtn').addEventListener('click', () => {
+  const sz = getExportSize();
+  Plotly.downloadImage('plot', {
+    format: 'png',
+    width: sz.width,
+    height: sz.height,
+    filename: 'MWD_Plot_' + sz.cm + 'cm_' + sz.dpi + 'dpi'
+  });
+});
+document.getElementById('legX').addEventListener('change', draw);
+document.getElementById('legY').addEventListener('change', draw);
+document.getElementById('legAnchor').addEventListener('change', draw);
+document.getElementById('showGrid').addEventListener('change', draw);
+document.getElementById('showMinor').addEventListener('change', draw);
+document.getElementById('showLegend').addEventListener('change', draw);
+document.getElementById('titleSize').addEventListener('change', draw);
+document.getElementById('tickSize').addEventListener('change', draw);
+document.getElementById('legSize').addEventListener('change', draw);
+
+document.getElementById('marginL').addEventListener('change', draw);
+document.getElementById('marginB').addEventListener('change', draw);
+['figWidthCm','figDPI','figAspect'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', () => { if (previewExportMode) applyPreviewSize(); draw(); });
+});
+
+function trapz(x, y) {
+  let s = 0;
+  for (let i=1; i<x.length; i++) s += 0.5*(y[i]+y[i-1])*(x[i]-x[i-1]);
+  return Math.abs(s) || 1;
+}
+
+const lsMap = { solid: 'solid', dash: 'dash', dot: 'dot', dashdot: 'dashdot' };
+
+function draw() {
+  const sel = selected();
+  updateStatus();
+  const titleSize = parseInt(document.getElementById('titleSize').value) || 14;
+  const tickSize = parseInt(document.getElementById('tickSize').value) || 12;
+  const legSize = parseInt(document.getElementById('legSize').value) || 10;
+  const traces = sel.map(n => {
+    const d = DATA[n];
+    let y = d.dW.slice();
+    if (areaNorm) {
+      const a = trapz(d.log10M, y);
+      y = y.map(v => v/a);
+    }
+    return {
+      x: d.M,
+      y,
+      name: state[n].displayName || n,
+      mode: 'lines',
+      line: { color: state[n].color, width: Math.max(1.2, tickSize * 0.15), dash: lsMap[state[n].ls] || 'solid' },
+      hovertemplate: (state[n].displayName || n) + '<br>MW=%{x}<br>dW/dlogM=%{y}<extra></extra>'
+    };
+  });
+  const legX = parseFloat(document.getElementById('legX').value) || 0.02;
+  const legY = parseFloat(document.getElementById('legY').value) || 0.98;
+  const showGrid = document.getElementById('showGrid').checked;
+  const showMinor = document.getElementById('showMinor').checked;
+  const showLegend = document.getElementById('showLegend').checked;
+  const axisWidth = Math.max(1.0, tickSize * 0.12);
+  const layout = {
+    paper_bgcolor: 'white',
+    plot_bgcolor: 'white',
+    font: { color: '#24292f', size: tickSize },
+    margin: { 
+      l: parseInt(document.getElementById('marginL').value) || 90, 
+      r: 20, 
+      t: 30, 
+      b: parseInt(document.getElementById('marginB').value) || 80 
+    },
+    xaxis: { 
+      type: 'log', 
+      title: { text: 'MW [g/mol]', font: { size: titleSize } },
+      range: [2, 5], 
+      gridcolor: showGrid ? '#eee' : 'transparent',
+      showgrid: showGrid,
+      zeroline: false,
+      dtick: showMinor ? undefined : 1,
+      tickformat: showMinor ? undefined : ',.0f',
+      tickfont: { size: tickSize },
+      showline: true,
+      linecolor: 'black',
+      linewidth: axisWidth,
+      mirror: false,
+      ticks: 'outside',
+      ticklen: Math.max(4, tickSize * 0.4),
+      tickcolor: 'black',
+      tickwidth: Math.max(1, axisWidth * 0.6)
+    },
+    yaxis: { 
+      title: { text: areaNorm ? 'normalized dw/dlogM' : 'dw/dlogM', font: { size: titleSize } },
+      gridcolor: showGrid ? '#eee' : 'transparent',
+      showgrid: showGrid,
+      zeroline: false, 
+      rangemode: 'tozero',
+      tickfont: { size: tickSize },
+      showline: true,
+      linecolor: 'black',
+      linewidth: axisWidth,
+      mirror: false,
+      ticks: 'outside',
+      ticklen: Math.max(4, tickSize * 0.4),
+      tickcolor: 'black',
+      tickwidth: Math.max(1, axisWidth * 0.6)
+    },
+    legend: {
+      x: legX,
+      y: legY,
+      xanchor: document.getElementById('legAnchor').value.split(' ')[1] || 'left',
+      yanchor: document.getElementById('legAnchor').value.split(' ')[0] || 'top',
+      bgcolor: 'rgba(255,255,255,0.85)',
+      bordercolor: '#e1e4e8',
+      borderwidth: 1,
+      font: { size: legSize }
+    },
+    showlegend: showLegend,
+    hovermode: 'closest'
+  };
+  Plotly.react('plot', traces, layout, { responsive: true, displaylogo: false });
+}
+
+// default selection
+draw();
+
+// CSV upload with column mapping modal
+let pendingCSV = null;
+
+document.getElementById('csvUpload').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) { alert('CSV appears empty'); return; }
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+  pendingCSV = { file, lines, headers };
+
+  const fill = (sel, guess) => {
+    sel.innerHTML = '<option value="-1">— none / use filename —</option>';
+    headers.forEach((h, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = h || '(empty)';
+      if (guess >= 0 && i === guess) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  };
+  const sampleGuess = headers.findIndex(h => /sample|strain|trace|name|peak/i.test(h));
+  const mwGuess = headers.findIndex(h => /mw|m_g|molecular|mol/i.test(h));
+  const dwGuess = headers.findIndex(h => /dw|dlog|height|intensity/i.test(h));
+  fill(document.getElementById('mapSample'), sampleGuess);
+  fill(document.getElementById('mapMW'), mwGuess);
+  fill(document.getElementById('mapDW'), dwGuess);
+  document.getElementById('csvFileName').textContent = file.name;
+  document.getElementById('csvModal').style.display = 'flex';
+  e.target.value = '';
+});
+
+document.getElementById('csvCancel').addEventListener('click', () => {
+  document.getElementById('csvModal').style.display = 'none';
+  pendingCSV = null;
+});
+
+document.getElementById('csvImport').addEventListener('click', () => {
+  if (!pendingCSV) return;
+  const sampleIdx = parseInt(document.getElementById('mapSample').value);
+  const mwIdx = parseInt(document.getElementById('mapMW').value);
+  const dwIdx = parseInt(document.getElementById('mapDW').value);
+  if (mwIdx < 0 || dwIdx < 0) { alert('MW and dw/dlogM columns are required'); return; }
+
+  const { file, lines } = pendingCSV;
+  const newData = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    if (cols.length < Math.max(mwIdx, dwIdx)+1) continue;
+    const sample = (sampleIdx >= 0 ? cols[sampleIdx] : file.name.replace(/\.csv$/i,'')).trim().replace(/"/g,'');
+    const M = parseFloat(cols[mwIdx]);
+    const dW = parseFloat(cols[dwIdx]);
+    if (isNaN(M) || isNaN(dW)) continue;
+    if (!newData[sample]) newData[sample] = {M:[], dW:[], log10M:[]};
+    newData[sample].M.push(M);
+    newData[sample].dW.push(dW);
+    newData[sample].log10M.push(Math.log10(M));
+  }
+
+  Object.entries(newData).forEach(([name, d]) => {
+    if (d.M.length > 400) {
+      const step = Math.ceil(d.M.length / 300);
+      const idxs = [];
+      for (let j=0; j<d.M.length; j+=step) idxs.push(j);
+      d.M = idxs.map(j => d.M[j]);
+      d.dW = idxs.map(j => d.dW[j]);
+      d.log10M = idxs.map(j => d.log10M[j]);
+    }
+    DATA[name] = d;
+    if (!state[name]) {
+      state[name] = { checked: false, color: defaultColor(name), ls: defaultLS(name), displayName: name };
+      const row = document.createElement('div');
+      row.className = 'sample-row';
+      row.draggable = true;
+      row.dataset.name = name;
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.addEventListener('change', () => { state[name].checked = cb.checked; updateStatus(); });
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'name';
+      nameInput.value = name;
+      nameInput.style.cssText = 'flex:1; font-size:12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; border:1px solid transparent; padding:2px 4px; background:transparent;';
+      nameInput.addEventListener('input', () => { state[name].displayName = nameInput.value; });
+      nameInput.addEventListener('change', draw);
+      const color = document.createElement('input');
+      color.type = 'color';
+      color.value = state[name].color;
+      color.addEventListener('input', () => { state[name].color = color.value; });
+      const ls = document.createElement('select');
+      ls.className = 'ls';
+      ['solid','dash','dot','dashdot'].forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s; opt.textContent = s;
+        if (s === state[name].ls) opt.selected = true;
+        ls.appendChild(opt);
+      });
+      ls.addEventListener('change', () => { state[name].ls = ls.value; });
+      row.appendChild(cb);
+      row.appendChild(nameInput);
+      row.appendChild(color);
+      row.appendChild(ls);
+      list.appendChild(row);
+      state[name].cb = cb;
+      state[name].nameEl = nameInput;
+      state[name].colorEl = color;
+      state[name].lsEl = ls;
+      names.push(name);
+    }
+  });
+  names.sort();
+  document.getElementById('csvModal').style.display = 'none';
+  pendingCSV = null;
+  alert('Added ' + Object.keys(newData).length + ' sample(s)');
+  updateStatus();
+});
+
+// Drag-and-drop reordering of sample list
+let dragSrc = null;
+list.addEventListener('dragstart', e => {
+  const row = e.target.closest('.sample-row');
+  if (!row) return;
+  dragSrc = row;
+  row.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', row.dataset.name);
+});
+list.addEventListener('dragend', e => {
+  if (dragSrc) dragSrc.classList.remove('dragging');
+  document.querySelectorAll('.sample-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+  dragSrc = null;
+});
+list.addEventListener('dragover', e => {
+  e.preventDefault();
+  const row = e.target.closest('.sample-row');
+  if (!row || row === dragSrc) return;
+  document.querySelectorAll('.sample-row.drag-over').forEach(r => r.classList.remove('drag-over'));
+  row.classList.add('drag-over');
+});
+list.addEventListener('dragleave', e => {
+  const row = e.target.closest('.sample-row');
+  if (row) row.classList.remove('drag-over');
+});
+list.addEventListener('drop', e => {
+  e.preventDefault();
+  const target = e.target.closest('.sample-row');
+  if (!target || !dragSrc || target === dragSrc) return;
+  target.classList.remove('drag-over');
+  const name = dragSrc.dataset.name;
+  const tName = target.dataset.name;
+  // reorder DOM
+  if (dragSrc.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING) {
+    target.after(dragSrc);
+  } else {
+    target.before(dragSrc);
+  }
+  // reorder names array to match DOM
+  const ordered = Array.from(list.querySelectorAll('.sample-row')).map(r => r.dataset.name);
+  names.length = 0;
+  names.push(...ordered);
+  draw();
+});
+
+
+renderPanelsUI();
+
+</script>
+</body>
+</html>
